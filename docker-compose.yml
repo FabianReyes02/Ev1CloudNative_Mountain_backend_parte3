@@ -1,0 +1,111 @@
+version: "3.9"
+
+# Backend-3 (EC2 10.0.1.13): Kafka (KRaft) + Kafka UI + pagos + recomendaciones.
+# Puertos:
+#   8087  -> servicio-pagos
+#   8088  -> servicio-recomendaciones
+#   29092 -> Kafka (listener EXTERNAL; lo usan backend-1 y backend-2)
+#   8090  -> Kafka UI (solo túnel SSH)
+#
+# Memoria: Kafka -Xmx512m + 2 JVM -Xmx256m. Con swap de 2 GB cabe en t3.small.
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: pedidos360-kafka
+    restart: unless-stopped
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms256m -Xmx512m}
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: pedidos360-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pedidos360
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  servicio-pagos:
+    build:
+      context: ./servicio-pagos
+    container_name: pedidos360-servicio-pagos
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8087:8080"
+    environment:
+      SERVER_PORT: "8080"
+      JAVA_OPTS: "${JAVA_OPTS_PAGOS:--Xms96m -Xmx256m}"
+      CORS_ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:5173}"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_ENABLED: "${JWT_ENABLED:-false}"
+      JWT_JWKS_URI: "${JWT_JWKS_URI:-}"
+      JWT_ISSUER_URI: "${JWT_ISSUER_URI:-}"
+      JWT_AUDIENCES: "${JWT_AUDIENCES:-}"
+      JWT_LOCAL_ENABLED: "${JWT_LOCAL_ENABLED:-false}"
+      JWT_LOCAL_SECRET: "${JWT_LOCAL_SECRET:-}"
+      JWT_LOCAL_ISSUER: "${JWT_LOCAL_ISSUER:-pedidos360-usuarios}"
+      JWT_LOCAL_AUDIENCE: "${JWT_LOCAL_AUDIENCE:-pedidos360-api}"
+      JWT_LOCAL_REQUIRED_SCOPE: "${JWT_LOCAL_REQUIRED_SCOPE:-orders.write}"
+      WEBPAY_ENABLED: "${WEBPAY_ENABLED:-false}"
+      WEBPAY_ENV: "${WEBPAY_ENV:-INTEGRATION}"
+      WEBPAY_COMMERCE_CODE: "${WEBPAY_COMMERCE_CODE:-}"
+      WEBPAY_API_KEY: "${WEBPAY_API_KEY:-}"
+      WEBPAY_RETURN_URL: "${WEBPAY_RETURN_URL:-http://localhost:8087/payments/webpay/return}"
+      WEBPAY_FRONTEND_URL: "${WEBPAY_FRONTEND_URL:-http://localhost:5173}"
+      FRAUDE_UMBRAL_APROBADO: "${FRAUDE_UMBRAL_APROBADO:-40}"
+      FRAUDE_UMBRAL_REVISION: "${FRAUDE_UMBRAL_REVISION:-70}"
+
+  servicio-recomendaciones:
+    build:
+      context: ./servicio-recomendaciones
+    container_name: pedidos360-servicio-recomendaciones
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8088:8080"
+    environment:
+      SERVER_PORT: "8080"
+      JAVA_OPTS: "${JAVA_OPTS_RECOMENDACIONES:--Xms96m -Xmx256m}"
+      CORS_ALLOWED_ORIGINS: "${FRONTEND_ORIGIN:-http://localhost:5173}"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      PRODUCTOS_URL: "${PRODUCTOS_URL:-http://host.docker.internal:8081}"
+      JWT_LOCAL_ENABLED: "${JWT_LOCAL_ENABLED:-false}"
+      JWT_LOCAL_SECRET: "${JWT_LOCAL_SECRET:-}"
+
+volumes:
+  kafka_data:
