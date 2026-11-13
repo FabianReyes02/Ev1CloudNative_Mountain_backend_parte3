@@ -23,6 +23,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Configuracion Kafka del servicio de pagos.
@@ -109,5 +110,10 @@ public class KafkaConfig {
 	@Bean
 	public NewTopic topicPagosFraude() {
 		return TopicBuilder.name(topicFraude).partitions(3).replicas(1).build();
+	}
+
+	@Bean
+	public ObjectMapper objectMapper() {
+		return new ObjectMapper();
 	}
 }

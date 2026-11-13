@@ -23,6 +23,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Kafka del servicio de recomendaciones. Consume pedidos.creados y
@@ -97,5 +98,10 @@ public class KafkaConfig {
 	@Bean
 	public NewTopic topicPagosProcesados() {
 		return TopicBuilder.name(topicPagos).partitions(3).replicas(1).build();
+	}
+
+	@Bean
+	public ObjectMapper objectMapper() {
+		return new ObjectMapper();
 	}
 }
