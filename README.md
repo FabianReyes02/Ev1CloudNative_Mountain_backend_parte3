@@ -1,5 +1,12 @@
 # Pedidos360 — Backend parte 3 (EC2 backend-3)
 
+## Pendiente (al retomar)
+
+1. Aplicar/terminar migración Rabbit→Kafka en parte1 y parte2 (usar `docs/parches/*.patch` como referencia; piloto en `servicio-pedidos` quedó revertido).
+2. Integrar pagos y recomendaciones en el frontend (`Ev1CloudNative_Mountain`): `PaymentModal`/checkout, sección de recomendaciones y proxy en `nginx.conf`.
+3. Verificar E2E local con Docker Compose y luego en AWS (guía en `docs/DESPLIEGUE_AWS.md`).
+4. Actualizar `NOTAS.md`/READMEs con estado final y evidencia para la defensa.
+
 Microservicios nuevos de la evaluación y broker de mensajería:
 
 | Servicio | Puerto local | Descripción |
